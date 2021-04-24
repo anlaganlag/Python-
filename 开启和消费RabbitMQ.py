@@ -21,3 +21,19 @@
                               )  # 生产者要发送的消息
         ch.basic_ack(delivery_tag=method.delivery_tag)  # MQ确认消费
         connection.close()
+
+#消费要尝试5次..
+    @retry(pika.exceptions.AMQPConnectionError, delay=5, jitter=(1, 3))  # MQ重连机制
+    def taskScheduling(self):
+        #首先是建立连接
+        connection = pika.BlockingConnection(self.Parameters)  # 创建连接
+        #保持通道存活
+        connection.process_data_events()
+        channel = connection.channel()  # 建立管道
+        channel.queue_declare(queue='AmazonFollowSaleUrls', durable=True)  # 队列持久化
+        channel.basic_qos(prefetch_count=100)  # 单个进程在MQ每次取得的消息量
+        #消费需要用回调函数去处理
+        channel.basic_consume('AmazonFollowSaleUrls',
+                              self.callback)  # 消费消息  如果收到消息就 调用回调函数      ,auto_ack=True  读取消息之后数据删除
+        print(' [*] Waiting for messages. To exit press CTRL+C')
+        channel.start_consuming()  # 只要一运行  就一直在等待
